@@ -1,48 +1,30 @@
 import run from "aocrunner"
 
-const parseInput = (rawInput: string) => rawInput.split("\n")
-const findNextBattery = (bank: string) => {
-  const regex = new RegExp(
-    `(` +
+const getJoltage = (banks: string, digits: number) => {
+  let regex: string | undefined
+  for (let index = 0; index < digits; index++) {
+    const buffer = index > 0 ? `.*.{${index}}` : ""
+    regex =
+      `(?<battery${digits - index}>` +
       `9|` +
-      `8(?!.*9)|` +
-      `7(?!.*[98])|` +
-      `6(?!.*[987])|` +
-      `5(?!.*[9876])|` +
-      `4(?!.*[98765])|` +
-      `3(?!.*[987654])|` +
-      `2(?!.*[9876543])|` +
-      `1(?!.*[98765432])` +
-      `)(.*)$`,
-  )
-
-  return bank.match(regex)!
-}
-const findBankJoltage = (bank: string, digits: number) => {
-  let batteries = ""
-  let remaining = bank
-  while (batteries.length < digits) {
-    const windowEnd = remaining.length - digits + batteries.length + 1
-    const nextBattery = findNextBattery(remaining.substring(0, windowEnd))
-    batteries = batteries + nextBattery[1]
-    remaining = nextBattery[2] + remaining.substring(windowEnd)
+      `8(?!.*9${buffer})|` +
+      `7(?!.*[89]${buffer})|` +
+      `6(?!.*[7-9]${buffer})|` +
+      `5(?!.*[6-9]${buffer})|` +
+      `4(?!.*[5-9]${buffer})|` +
+      `3(?!.*[4-9]${buffer})|` +
+      `2(?!.*[3-9]${buffer})|` +
+      `1(?!.*[2-9]${buffer})` +
+      `).*?${regex ?? `$`}`
   }
-  return parseInt(batteries)
+  return [...banks.matchAll(new RegExp(regex!, "mg"))].reduce(
+    (total, bank) => total + parseInt(Object.values(bank.groups!).join("")),
+    0,
+  )
 }
 
-const part1 = (rawInput: string) => {
-  const banks = parseInput(rawInput)
-  return banks.reduce((total, bank) => {
-    return total + findBankJoltage(bank, 2)
-  }, 0)
-}
-
-const part2 = (rawInput: string) => {
-  const banks = parseInput(rawInput)
-  return banks.reduce((total, bank) => {
-    return total + findBankJoltage(bank, 12)
-  }, 0)
-}
+const part1 = (rawInput: string) => getJoltage(rawInput, 2)
+const part2 = (rawInput: string) => getJoltage(rawInput, 12)
 
 const input = `987654321111111
 811111111111119
