@@ -1,39 +1,35 @@
 import run from "aocrunner"
 
-const parseInput = (rawInput: string) =>
-  rawInput
-    .split("\n")
-    .map((bank) => bank.split("").map((battery) => parseInt(battery)))
-const findMaxIndex = (
-  bank: number[],
-  startingIndex: number,
-  remainingIndexes: number,
-) => {
-  let maxIndex = startingIndex
-  for (
-    let index = startingIndex + 1;
-    index < bank.length - remainingIndexes && bank[maxIndex] !== 9;
-    index++
-  ) {
-    if (bank[index] > bank[maxIndex]) {
-      maxIndex = index
-    }
-  }
-  return maxIndex
+const parseInput = (rawInput: string) => rawInput.split("\n")
+const findNextBattery = (bank: string, remainingIndexes: number) => {
+  const regex = new RegExp(
+    `(` +
+      `9|` +
+      `8(?!.*9.*.{${remainingIndexes}})|` +
+      `7(?!.*[98].*.{${remainingIndexes}})|` +
+      `6(?!.*[987].*.{${remainingIndexes}})|` +
+      `5(?!.*[9876].*.{${remainingIndexes}})|` +
+      `4(?!.*[98765].*.{${remainingIndexes}})|` +
+      `3(?!.*[987654].*.{${remainingIndexes}})|` +
+      `2(?!.*[9876543].*.{${remainingIndexes}})|` +
+      `1(?!.*[98765432].*.{${remainingIndexes}})` +
+      `)(.*.{${remainingIndexes}})$`,
+  )
+
+  return bank.match(regex)!
 }
-const findBankJoltage = (bank: number[], digits: number) => {
-  const indexes: number[] = []
-  for (let digit = 0; digit < digits; digit++) {
-    const lastIndex = indexes[indexes.length - 1]
-    indexes.push(
-      findMaxIndex(
-        bank,
-        lastIndex !== undefined ? lastIndex + 1 : 0,
-        digits - indexes.length - 1,
-      ),
+const findBankJoltage = (bank: string, digits: number) => {
+  let batteries = ""
+  let remaining = bank
+  while (batteries.length < digits) {
+    const nextBattery = findNextBattery(
+      remaining,
+      digits - batteries.length - 1,
     )
+    batteries = batteries + nextBattery[1]
+    remaining = nextBattery[2]
   }
-  return parseInt(indexes.map((index) => bank[index]).join(""))
+  return parseInt(batteries)
 }
 
 const part1 = (rawInput: string) => {
