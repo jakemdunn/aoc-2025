@@ -1,19 +1,19 @@
 import run from "aocrunner"
 
 const parseInput = (rawInput: string) => rawInput.split("\n")
-const findNextBattery = (bank: string, remainingIndexes: number) => {
+const findNextBattery = (bank: string) => {
   const regex = new RegExp(
     `(` +
       `9|` +
-      `8(?!.*9.*.{${remainingIndexes}})|` +
-      `7(?!.*[98].*.{${remainingIndexes}})|` +
-      `6(?!.*[987].*.{${remainingIndexes}})|` +
-      `5(?!.*[9876].*.{${remainingIndexes}})|` +
-      `4(?!.*[98765].*.{${remainingIndexes}})|` +
-      `3(?!.*[987654].*.{${remainingIndexes}})|` +
-      `2(?!.*[9876543].*.{${remainingIndexes}})|` +
-      `1(?!.*[98765432].*.{${remainingIndexes}})` +
-      `)(.*.{${remainingIndexes}})$`,
+      `8(?!.*9)|` +
+      `7(?!.*[98])|` +
+      `6(?!.*[987])|` +
+      `5(?!.*[9876])|` +
+      `4(?!.*[98765])|` +
+      `3(?!.*[987654])|` +
+      `2(?!.*[9876543])|` +
+      `1(?!.*[98765432])` +
+      `)(.*)$`,
   )
 
   return bank.match(regex)!
@@ -22,12 +22,10 @@ const findBankJoltage = (bank: string, digits: number) => {
   let batteries = ""
   let remaining = bank
   while (batteries.length < digits) {
-    const nextBattery = findNextBattery(
-      remaining,
-      digits - batteries.length - 1,
-    )
+    const windowEnd = remaining.length - digits + batteries.length + 1
+    const nextBattery = findNextBattery(remaining.substring(0, windowEnd))
     batteries = batteries + nextBattery[1]
-    remaining = nextBattery[2]
+    remaining = nextBattery[2] + remaining.substring(windowEnd)
   }
   return parseInt(batteries)
 }
