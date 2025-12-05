@@ -1,76 +1,43 @@
 import run from "aocrunner"
+import { Grid, MaybeIndex } from "../utils/grid.js"
 
-const parseInput = (rawInput: string) =>
-  rawInput.split("\n").map((line) => line.split(""))
+type Rolls = "@" | "x" | "."
+const removeRolls = (grid: Grid<Rolls>, rolls: MaybeIndex[]) => {
+  const adjacent = new Set<number>()
+  const removed = new Set<number>()
+  rolls.forEach((roll) => {
+    const adjacentRolls = grid
+      .getItemsAtDeltas(roll, Grid.DELTAS.SURROUNDING)
+      .filter((item) => item.value === "@")
 
-type Coord = [number, number]
-const SPACES: Coord[] = [
-  [-1, -1],
-  [0, -1],
-  [1, -1],
-  [-1, 0],
-  [1, 0],
-  [-1, 1],
-  [0, 1],
-  [1, 1],
-]
-
-const getRolls = (grid: string[][]): Coord[] => {
-  return grid.reduce((rolls, row, rowIndex) => {
-    row.forEach((gridItem, columnIndex) => {
-      if (gridItem === "@") {
-        rolls = [...rolls, [columnIndex, rowIndex]]
-      }
-    })
-    return rolls
-  }, [] as Coord[])
-}
-
-const removeRolls = (grid: string[][], rolls: Coord[]) => {
-  return rolls.reduce(
-    ({ removed, adjacent }, [rollX, rollY]) => {
-      const adjacentRolls = SPACES.reduce((adjacent, [x, y]) => {
-        if (grid[rollY + y]?.[rollX + x] === "@") {
-          return [...adjacent, [rollX + x, rollY + y] as Coord]
-        }
-        return adjacent
-      }, [] as Coord[])
-
-      if (adjacentRolls.length < 4) {
-        adjacentRolls.forEach((coord) => {
-          adjacent.set(coord.join(","), coord)
-        })
-        return {
-          removed: [...removed, [rollX, rollY] as Coord],
-          adjacent,
-        }
-      }
-      return { removed, adjacent }
-    },
-    { removed: [] as Coord[], adjacent: new Map<string, Coord>() },
-  )
+    if (adjacentRolls.length < 4) {
+      adjacentRolls.forEach((coord) => {
+        adjacent.add(coord.index)
+      })
+      removed.add(grid.getMaybeIndex(roll))
+    }
+  })
+  return { removed, adjacent }
 }
 
 const part1 = (rawInput: string) => {
-  const grid = parseInput(rawInput)
-  const rolls = getRolls(grid)
-  return removeRolls(grid, rolls).removed.length
+  const grid = new Grid<Rolls>(rawInput)
+  const rolls = grid.findItems("@")
+  return removeRolls(grid, rolls).removed.size
 }
 
 const part2 = (rawInput: string) => {
-  const grid = parseInput(rawInput)
+  const grid = new Grid<Rolls>(rawInput)
   let totalRemoved = 0
-  let removal = removeRolls(grid, getRolls(grid))
-
-  while (removal.removed.length > 0) {
-    totalRemoved += removal.removed.length
-    removal.removed.forEach(([x, y]) => {
-      grid[y][x] = "x"
-      removal.adjacent.delete(`${x},${y}`)
+  let { removed, adjacent } = removeRolls(grid, grid.findItems("@"))
+  while (removed.size > 0) {
+    totalRemoved += removed.size
+    removed.forEach((item) => {
+      grid.set(item, "x")
+      adjacent.delete(item)
     })
-    removal = removeRolls(grid, [...removal.adjacent.values()])
+    ;({ removed, adjacent } = removeRolls(grid, [...adjacent.values()]))
   }
-
   return totalRemoved
 }
 
