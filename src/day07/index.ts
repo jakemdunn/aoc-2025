@@ -1,7 +1,9 @@
 import run from "aocrunner"
+import { memo } from "../utils/memo.js"
 
-const runBeams = (rawInput: string) => {
-  const lineLength = rawInput.indexOf("\n")
+const runBeams = memo((rawInput: string) => {
+  let parsed = rawInput.replace(/^\.*$\n?/gm, "")
+  const lineLength = parsed.indexOf("\n")
   const regexGroups = [
     `[\\|S].{${lineLength + 1}}`,
     `[\\|S].{${lineLength}}\\^.`,
@@ -9,20 +11,26 @@ const runBeams = (rawInput: string) => {
   ]
   const regex = new RegExp(`\\.(?<=(${regexGroups.join("|")}))`, "gms")
 
-  let last = rawInput
-  let parsed = rawInput.replace(regex, "|")
-  while (parsed !== last) {
-    last = parsed
-    parsed = parsed.replace(regex, "|")
-  }
+  parsed = parsed
+    .split("\n")
+    .reduce((lines, line, index) => {
+      if (index === 0) return [line]
+      return [
+        ...lines,
+        `${lines[lines.length - 1]}\n${line}`
+          .replace(regex, "|")
+          .substring(lineLength + 1),
+      ]
+    }, [] as string[])
+    .join("\n")
 
   const splitsRegex = new RegExp(
     `(?<=\\|)(?<!\\..{${lineLength}})\\^(?=\\|)`,
     "gms",
   )
 
-  return { parsed, splitsRegex }
-}
+  return { parsed, splitsRegex, lineLength }
+})
 
 const part1 = (rawInput: string) => {
   const { parsed, splitsRegex } = runBeams(rawInput)
@@ -30,18 +38,13 @@ const part1 = (rawInput: string) => {
 }
 
 const part2 = (rawInput: string) => {
-  const { parsed, splitsRegex } = runBeams(rawInput.replace(/^\.*$\n?/gm, ""))
+  const { parsed, splitsRegex, lineLength } = runBeams(rawInput)
   const paths: Record<number, number> = {}
-  parsed.split("\n").forEach((line, index, lines) => {
-    ;[...(lines[index - 1] ?? "" + line).matchAll(splitsRegex)].forEach(
-      (match) => {
-        paths[match.index - 1] =
-          (paths[match.index - 1] ?? 0) + (paths[match.index] ?? 1)
-        paths[match.index + 1] =
-          (paths[match.index + 1] ?? 0) + (paths[match.index] ?? 1)
-        paths[match.index] = 0
-      },
-    )
+  ;[...parsed.matchAll(splitsRegex)].forEach((match) => {
+    const column = match.index % (lineLength + 1)
+    paths[column - 1] = (paths[column - 1] ?? 0) + (paths[column] ?? 1)
+    paths[column + 1] = (paths[column + 1] ?? 0) + (paths[column] ?? 1)
+    paths[column] = 0
   })
 
   return Object.values(paths).reduce((sum, timelines) => sum + timelines)
