@@ -1,52 +1,44 @@
 import run from "aocrunner"
-import { memo } from "../utils/memo.js"
 
-const runBeams = memo((rawInput: string) => {
-  let parsed = rawInput.replace(/^\.*$\n?/gm, "")
-  const lineLength = parsed.indexOf("\n")
-  const regexGroups = [
-    `[\\|S].{${lineLength + 1}}`,
-    `[\\|S].{${lineLength}}\\^.`,
-    `[\\|S].{${lineLength}}(?=\\^)`,
-  ]
-  const regex = new RegExp(`\\.(?<=(${regexGroups.join("|")}))`, "gms")
-
-  parsed = parsed
-    .split("\n")
-    .reduce((lines, line, index) => {
-      if (index === 0) return [line]
-      return [
-        ...lines,
-        `${lines[lines.length - 1]}\n${line}`
-          .replace(regex, "|")
-          .substring(lineLength + 1),
-      ]
-    }, [] as string[])
-    .join("\n")
-
-  const splitsRegex = new RegExp(
-    `(?<=\\|)(?<!\\..{${lineLength}})\\^(?=\\|)`,
-    "gms",
+const iterateInput = (
+  rawInput: string,
+  iterator: (character: string, index: number) => void,
+) => {
+  const lineLength = rawInput.indexOf("\n") + 1
+  ;[...rawInput.matchAll(/(S|\^)/gm)].map((match) =>
+    iterator(match[0], match.index % lineLength),
   )
-
-  return { parsed, splitsRegex, lineLength }
-})
+}
 
 const part1 = (rawInput: string) => {
-  const { parsed, splitsRegex } = runBeams(rawInput)
-  return parsed.match(splitsRegex)?.length
+  const paths: Record<number, boolean> = {}
+  let sum: number = 0
+  iterateInput(rawInput, (character, index) => {
+    if (character === "S") {
+      paths[index] = true
+    }
+    if (character === "^" && paths[index]) {
+      paths[index] = false
+      paths[index + 1] = true
+      paths[index - 1] = true
+      sum++
+    }
+  })
+  return sum
 }
 
 const part2 = (rawInput: string) => {
-  const { parsed, splitsRegex, lineLength } = runBeams(rawInput)
   const paths: Record<number, number> = {}
-  ;[...parsed.matchAll(splitsRegex)].forEach((match) => {
-    const column = match.index % (lineLength + 1)
-    paths[column - 1] = (paths[column - 1] ?? 0) + (paths[column] ?? 1)
-    paths[column + 1] = (paths[column + 1] ?? 0) + (paths[column] ?? 1)
-    paths[column] = 0
+  iterateInput(rawInput, (character, index) => {
+    if (character === "S") {
+      paths[index] = 1
+    }
+    if (character === "^" && paths[index]) {
+      paths[index + 1] = (paths[index + 1] ?? 0) + paths[index]
+      paths[index - 1] = (paths[index - 1] ?? 0) + paths[index]
+      delete paths[index]
+    }
   })
-
   return Object.values(paths).reduce((sum, timelines) => sum + timelines)
 }
 
