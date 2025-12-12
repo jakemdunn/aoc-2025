@@ -1,4 +1,5 @@
 import run from "aocrunner"
+import { init } from "z3-solver"
 import { memo } from "../utils/memo.js"
 
 const parseInput = (rawInput: string) =>
@@ -27,23 +28,23 @@ const applyActions = memo(({ actions }: Parsed[0], state: string) => {
   })
 })
 
-const getSteps = (
-  machines: Parsed,
-  initialState: (machine: Parsed[0]) => string,
-  target: keyof Parsed[0] = "target",
-  actionCallback = applyActions,
-) => {
+const getSteps = (machines: Parsed) => {
   const steps = machines.reduce((sum, machine) => {
     let steps = 0
-    let states = new Set([initialState(machine)])
+    let states = new Set([
+      machine.target
+        .split("")
+        .map(() => ".")
+        .join(""),
+    ])
     let nextStates = new Set<string>()
     let maxSteps = 10
     while (maxSteps--) {
       for (let state of states) {
-        if (state === machine[target]) {
+        if (state === machine.target) {
           return sum + steps
         }
-        for (let updated of actionCallback(machine, state)) {
+        for (let updated of applyActions(machine, state)) {
           if (updated) nextStates.add(updated)
         }
       }
@@ -57,135 +58,50 @@ const getSteps = (
   return steps
 }
 
+const { Context } = await init()
+const solveMachine = async ({ targetJoltageArray, actions }: Parsed[0]) => {
+  const { Int, Optimize } = new (Context as any)("main")
+
+  const stateLength = targetJoltageArray.length
+  const presses = actions.map((_, i) => Int.const(`x_${i}`))
+
+  const optimizer = new Optimize()
+  presses.forEach((p) => optimizer.add(p.ge(0)))
+
+  // Constraint: for each state position, sum of contributing actions = target
+  for (let j = 0; j < stateLength; j++) {
+    const contributing = actions
+      .map((indices, i) => (indices.includes(j) ? presses[i] : null))
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+
+    if (contributing.length > 0) {
+      optimizer.add(
+        contributing.reduce((a, b) => a.add(b)).eq(targetJoltageArray[j]),
+      )
+    }
+  }
+
+  // Minimize total presses
+  optimizer.minimize(presses.reduce((a, b) => a.add(b)))
+
+  await optimizer.check()
+  const model = optimizer.model()
+
+  return presses.reduce((sum, p) => sum + Number(model.eval(p).toString()), 0)
+}
+
 const part1 = (rawInput: string) => {
   const machines = parseInput(rawInput)
-  return getSteps(machines, (machine) =>
-    machine.target
-      .split("")
-      .map(() => ".")
-      .join(""),
-  )
+  return getSteps(machines)
 }
 
-interface JoltageOption {
-  state: number[]
-  distance: ReturnType<typeof getJoltageGap>
-  steps: 0
-  key: string
-}
-
-const getJoltageGap = (current: number[], target: number[]) =>
-  target.reduce(
-    ({ gap, max, matched }, joltage, index) => {
-      return {
-        gap: gap + joltage - current[index],
-        max: Math.max(max, joltage - current[index]),
-        matched: matched + (joltage === current[index] ? 1 : 0),
-      }
-    },
-    { gap: 0, max: 0, matched: 0 },
-  )
-
-// 1989 TOO LOW
-const part2 = (rawInput: string) => {
+const part2 = async (rawInput: string) => {
   const machines = parseInput(rawInput)
-  const steps = machines.reduce((sum, machine, index) => {
-    const initialState = machine.targetJoltage.split(",").map(() => 0)
-    const initialStateKey = initialState.join(",")
-    const options = new Map<string, JoltageOption>()
-    options.set(initialStateKey, {
-      state: initialState,
-      distance: getJoltageGap(initialState, machine.targetJoltageArray),
-      steps: 0,
-      key: initialStateKey,
-    })
-
-    const appliedJoltages = new Set<string>()
-    const applyJoltages = (
-      { actions, targetJoltageArray }: Parsed[0],
-      option: JoltageOption,
-    ) => {
-      return actions.reduce((newOptions, action) => {
-        const newOption = { ...option, state: [...option.state] }
-        for (let joltageIndex of action) {
-          const updated = newOption.state[joltageIndex] + 1
-          if (updated > targetJoltageArray[joltageIndex]) return newOptions
-          newOption.state[joltageIndex] = updated
-        }
-        newOption.key = newOption.state.join(",")
-        if (appliedJoltages.has(newOption.key)) return newOptions
-        newOption.steps++
-        newOption.distance = getJoltageGap(newOption.state, targetJoltageArray)
-        return [...newOptions, newOption]
-      }, [] as JoltageOption[])
-    }
-
-    const getNextOption = () => {
-      let option: JoltageOption = options.values().next().value!
-      for (let compared of options.values()) {
-        if (compared.distance.gap < option.distance.gap) option = compared
-        if (
-          compared.distance.gap === option.distance.gap &&
-          compared.distance.max < option.distance.max
-        )
-          option = compared
-        if (
-          compared.distance.gap === option.distance.gap &&
-          compared.distance.max === option.distance.max &&
-          compared.distance.matched < option.distance.matched
-        )
-          option = compared
-      }
-      return option
-    }
-
-    let maxSteps = 1000
-    while (maxSteps-- && options.size) {
-      const option = getNextOption()
-      options.delete(option.key)
-      appliedJoltages.add(option.key)
-      // console.log(
-      //   "checking",
-      //   machine.targetJoltage,
-      //   option.key,
-      //   option.steps,
-      //   option.distance,
-      // )
-      if (option.key === machine.targetJoltage) {
-        console.log(
-          `found path for ${index + 1} of ${machines.length}`,
-          JSON.stringify(option),
-          machine.targetJoltage,
-          maxSteps,
-        )
-        return sum + option.steps
-      }
-      for (let updated of applyJoltages(machine, option)) {
-        if (!options.has(updated.key)) {
-          options.set(updated.key, updated)
-        }
-      }
-      // for (let state of states) {
-      //   if (state === machine.targetJoltage) {
-      //     return sum + steps
-      //   }
-      //   for (let updated of applyJoltages(machine, state)) {
-      //     if (updated) nextStates.add(updated)
-      //   }
-      // }
-      // steps++
-      // states = nextStates
-      // nextStates = new Set()
-    }
-    console.log(
-      `no path found for ${index + 1} of ${machines.length}`,
-      JSON.stringify(getNextOption()),
-      machine.targetJoltage,
-    )
-    return sum
-  }, 0)
-
-  return steps
+  let total = 0
+  for (const machine of machines) {
+    total += await solveMachine(machine)
+  }
+  return total
 }
 
 const input = `[.##.] (3) (1,3) (2) (2,3) (0,2) (0,1) {3,5,4,7}
@@ -209,7 +125,7 @@ run({
         expected: 33,
       },
     ],
-    solution: part2,
+    solution: part2 as unknown as (input: string) => number,
   },
   trimTestInputs: true,
   onlyTests: false,
